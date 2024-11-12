@@ -32,10 +32,12 @@ instance_attr = [
 
 
 def get_instances():
+    response = requests.request("GET", url, headers=headers, data=payload)
     return response.json()["instances"]
 
 
 def get_instance(id):
+    response = requests.request("GET", url, headers=headers, data=payload)
     found_instance = None
     for obj in response.json()["instances"]:
         if obj["id"] == int(id):
