@@ -41,6 +41,11 @@ def launch_instance():
         region="[VN]",
         image="pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime",
         env="-p 8081:8081 -p 8680:8680",
+        jupyter_dir="/",
+        jupyter_lab=True,
+        ssh=True,
+        direct=True,
+        onstart_cmd="sudo apt-get install screen unzip nano zsh htop default-jre zip -yenv | grep _ >> /etc/environment; echo 'starting up'",
     )
     if instance:
         instance_id = get_instance_id(instance)

@@ -41,10 +41,10 @@ async def get_ssh(instance_id):
     return api_service.get_ssh_info(instance_id)
 
 
-# return {"public_ip": str, "hostports": str[]}
-@app.get("/instances/ip_and_hostports/{instance_id}")
-async def get_ip_and_hostports(instance_id):
-    return api_service.get_ip_and_hostports(instance_id)
+# return {"public_ip": str, "hostport": str}
+@app.get("/instances/ip_and_hostport/{instance_id}")
+async def get_ip_and_hostport(instance_id):
+    return api_service.get_ip_and_hostport(instance_id)
 
 
 # return {"id": int}

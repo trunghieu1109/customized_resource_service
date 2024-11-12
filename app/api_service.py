@@ -54,13 +54,15 @@ def get_instance_info(id):
 
 def get_ssh_info(id):
     instance = get_instance(id)
-    ssh_addr = instance["ssh_host"]
-    ssh_port = instance["ssh_port"]
-    return {"ssh_addr": ssh_addr, "ssh_port": ssh_port}
+    if instance:
+        ssh_addr = instance["ssh_host"]
+        ssh_port = instance["ssh_port"]
+        return {"ssh_addr": ssh_addr, "ssh_port": ssh_port}
 
 
-def get_ip_and_hostports(id):
+def get_ip_and_hostport(id):
     instance = get_instance(id)
-    public_ip = instance["public_ipaddr"]
-    host_ports_8680_tcp = [entry["HostPort"] for entry in instance["ports"]["8680/tcp"]]
-    return {"public_ip": public_ip, "hostports": host_ports_8680_tcp}
+    if instance:
+        public_ip = instance["public_ipaddr"]
+        host_ports_8680_tcp = instance["ports"]["8680/tcp"][0]["HostPort"]
+        return {"public_ip": public_ip, "hostports": host_ports_8680_tcp}
