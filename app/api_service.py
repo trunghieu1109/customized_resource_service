@@ -5,52 +5,62 @@ from config import API_KEY
 url = f"https://console.vast.ai/api/v0/instances?api_key={API_KEY}"
 
 payload = {}
-headers = {
-   'Accept': 'application/json',
-   'Content-Type': 'application/json'
-}
-
-def create_new_object(old_obj, attributes):
-    return {attr: old_obj[attr] for attr in attributes}
-
-old_object = {
-    "id": 1,
-    "name": "Old Object",
-    "description": "This is the old object",
-    "value": 100
-}
-
-def create_new_object(old_obj, attributes):
-    return {attr: old_obj[attr] for attr in attributes}
-
-old_object = {
-    "id": 1,
-    "name": "Old Object",
-    "description": "This is the old object",
-    "value": 100
-}
-
-id_to_find = 13612535
-found_object = None
+headers = {"Accept": "application/json", "Content-Type": "application/json"}
 response = requests.request("GET", url, headers=headers, data=payload)
-# print(response.json())
-# print(type(response.json()))
-for obj in response.json()["instances"]:
-  if(obj["id"] == id_to_find):
-    found_object = obj
-    break
-
-def create_new_object(old_obj, attributes):
-    return {attr: old_obj[attr] for attr in attributes}
-
-#print(found_object)
-attr = ["machine_id", 'geolocation', 'host_id', 'id', 'num_gpus', 'gpu_name', 'gpu_ram',
-        'gpu_totalram', 'cpu_name', 'cpu_ram', 'cpu_cores', 'ssh_host', 'ssh_port', 'image_uuid', 'image_runtype', 'extra_env', 'onstart', 'direct_port_end', 'direct_port_start', 'ports']
-attributes_to_copy = ["id", "name"]
-
-new_object = create_new_object(old_object, attributes_to_copy)
-
-#print(new_object)
 
 
+instance_attr = [
+    "id",
+    "geolocation",
+    "ssh_host",
+    "ssh_port",
+    "direct_port_start",
+    "direct_port_end",
+    "public_ipaddr",
+    "ports",
+    "machine_id",
+    "host_id",
+    "num_gpus",
+    "gpu_name",
+    "cpu_name",
+    "image_uuid",
+    "image_runtype",
+    "extra_env",
+    "onstart",
+    "machine_dir_ssh_port",
+]
 
+
+def get_instances():
+    return response.json()["instances"]
+
+
+def get_instance(id):
+    found_instance = None
+    for obj in response.json()["instances"]:
+        if obj["id"] == int(id):
+            found_instance = obj
+            break
+    return found_instance
+
+
+def essential_instance_info(old_instance, attributes):
+    return {attr: old_instance[attr] for attr in attributes}
+
+
+def get_instance_info(id):
+    return essential_instance_info(get_instance(id), instance_attr)
+
+
+def get_ssh_info(id):
+    instance = get_instance(id)
+    ssh_addr = instance["ssh_host"]
+    ssh_port = instance["ssh_port"]
+    return {"ssh_addr": ssh_addr, "ssh_port": ssh_port}
+
+
+def get_ip_and_hostports(id):
+    instance = get_instance(id)
+    public_ip = instance["public_ipaddr"]
+    host_ports_8680_tcp = [entry["HostPort"] for entry in instance["ports"]["8680/tcp"]]
+    return {"public_ip": public_ip, "hostports": host_ports_8680_tcp}
