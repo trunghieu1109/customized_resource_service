@@ -37,7 +37,7 @@ def get_ssh_info(instance_id):
 def launch_instance():
     instance = vast_sdk.launch_instance(
         num_gpus="1",
-        gpu_name="RTX_3060",
+        gpu_name="RTX_3060",disk="20",
         region="[VN]",
         image="pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime",
         env="-p 8081:8081 -p 8680:8680",
@@ -51,7 +51,6 @@ def launch_instance():
         instance_id = get_instance_id(instance)
         return {"id": instance_id}
     return None
-
 
 def test():
     instance_info = launch_instance()
