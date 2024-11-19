@@ -14,6 +14,12 @@ from pydantic import BaseModel
 class Ssh_attach(BaseModel):
     instance_id: int | str
     ssh_public_key: str
+    
+
+class InstanceRequest(BaseModel):
+    task: str
+    training_time: int
+    presets: str
 
 
 vast_sdk = VastAI(api_key=API_KEY)
@@ -77,20 +83,20 @@ async def get_ip_and_hostport(instance_id):
 
 
 @app.post("/instances")
-async def create_instance(task: str, training_time: int, presets: str):
+async def create_instance(req: InstanceRequest):
     # TODO: Implement the logic to create an instance based on 3 parameters
-    new_istance = await sdk_service.launch_instance(task, training_time, presets)
+    new_istance = await sdk_service.launch_instance(req.task, req.training_time, req.presets)
     return new_istance
 
 
 @app.post("/select_instance")
-async def select_instance(task: str, training_time: int, presets: str):
+async def select_instance(req: InstanceRequest):
     # TODO: If some appropriate instances already running, select it and return the instance_id
     # TODO: If no instances are running, create a new instance
-    instance = await api_service.select_available_instance(task, training_time, presets)
+    instance = await api_service.select_available_instance(req.task, req.training_time, req.presets)
     if instance:
         return instance
-    return await create_instance(task, training_time, presets)
+    return await create_instance(req)
 
 
 @app.get("/instances/start/{instance_id}")
