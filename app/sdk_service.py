@@ -54,7 +54,7 @@ async def launch_instance(task: str, training_time: int, presets: str):
         jupyter_lab=True,
         ssh=True,
         direct=True,
-        onstart_cmd="sudo apt-get install screen unzip nano zsh htop default-jre zip -yenv | grep _ >> /etc/environment; echo 'starting up'",
+        onstart_cmd="sudo apt-get install screen unzip nano zsh htop lsof default-jre zip -yenv | grep _ >> /etc/environment; echo 'starting up'",
     )
     print("----------")
     if instance:
