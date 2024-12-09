@@ -1,3 +1,10 @@
 [vastai]
-api_key=insert_your_api_key_here
+api_key=enter_your_api_key
+
+[email]
+server_host=smtp.gmail.com
+server_port=465
+sender_email=enter_your_system_email
+sender_name=enter_your_system_name
+sender_pwd=enter_your_system_password
 

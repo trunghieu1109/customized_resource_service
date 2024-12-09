@@ -9,6 +9,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import api_service
+import mail_service
 
 vast_sdk = VastAI(api_key=API_KEY)
 
@@ -38,7 +39,6 @@ def get_ssh_info(instance_id):
     else:
         print("Not found ssh info!")
         return None, None
-
 
 # Main function
 # Create new instance and return (instance id, ssh_addr, ssh_port)
@@ -106,6 +106,87 @@ async def launch_instance(task: str, training_time: int, presets: str):
     print("Recreating instance...")
     launch_instance(task, training_time, presets)
     return None
+
+def compose_body_error_instance(client_email, instance, message):
+    return f"""
+                Dear {client_email},
+
+                We are pleased to inform you that the processing of your instance on Vast AI has been error.
+
+                Instance ID: {instance['id']}
+                Image: {instance['image_uuid']}
+                Error Message: {message}
+                
+                You now have the option to either:
+
+                1. Delete the instance (This will permanently remove it from the system).
+                2. Stop the instance (This will halt its current execution, but it can be resumed later).
+                
+                If you have any questions or need further assistance, feel free to reach out to our support team.
+
+                Best regards,
+                iSE Laboratory
+            """
+
+def compose_subject_error_instance(instance_id):
+    return f"Notification about the process of the instance {instance_id} on Vast AI has been error."
+
+def compose_body_finished_instance(client_email, instance):
+    return f"""
+                Dear {client_email},
+
+                We are pleased to inform you that the processing of your instance on Vast AI has been completed.
+
+                Instance ID: {instance['id']}
+                Image: {instance['image_uuid']}
+                
+                You now have the option to either:
+
+                1. Delete the instance (This will permanently remove it from the system).
+                2. Stop the instance (This will halt its current execution, but it can be resumed later).
+                
+                If you have any questions or need further assistance, feel free to reach out to our support team.
+
+                Best regards,
+                iSE Laboratory
+            """
+
+def compose_subject_finished_instance(instance_id):
+    return f"Notification about the process of the instance {instance_id} on Vast AI has been completed."
+
+async def post_process(instance_id: str, option: str, client_email: str = ""):
+    
+    instance = api_service.get_instance(instance_id)
+    
+    if instance and instance['cur_state'] != "stopped":
+        if option == "stop":
+            vast_sdk.stop_instance(ID=instance_id)
+        elif option in ["destroy", "delete"]:
+            vast_sdk.destroy_instance(id=instance_id)
+        elif option == "send email":
+            
+            subject = compose_subject_finished_instance(instance_id)
+            body = compose_body_finished_instance(client_email, instance)
+            
+            result = mail_service.send_email(client_email, subject, body)
+            
+            return result
+            
+        else:
+            return {
+                "status": "error",
+                "message": "Process option is invalid! You shoud pass one of the following options: stop, destroy or send email."
+            }
+        
+        return {
+            "status": "success",
+            "message": f"Post process instance {instance_id}, option: {option} successfully!"
+        }
+    else:
+        return {
+            "status": "error",
+            "message": f"Instance {instance_id} was not existed or stopped! Please check instace_id."
+        }
 
 
 def test():

@@ -6,10 +6,10 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import app.sdk_service as sdk_service
+import app.schedule_service as schedule_service
 import api_service
 from config import API_KEY
 from pydantic import BaseModel
-
 
 class Ssh_attach(BaseModel):
     instance_id: int | str
@@ -20,8 +20,20 @@ class InstanceRequest(BaseModel):
     task: str
     training_time: int
     presets: str
-
-
+    
+class JobRequest(BaseModel):
+    instance_id: int | str
+    time_interval: int
+    test_script: str
+    backup_script: str
+    option: str
+    client_email: str
+    
+class PostProcessRequest(BaseModel):
+    instance_id: int | str
+    option: str
+    client_email: str
+    
 vast_sdk = VastAI(api_key=API_KEY)
 app = FastAPI()
 
@@ -120,3 +132,33 @@ async def attach_ssh_key(ssh_attach: Ssh_attach):
 @app.delete("/instances/{instance_id}")
 async def delete_instance(instance_id):
     return vast_sdk.destroy_instance(id=instance_id)
+
+
+# register new tracking job
+@app.post("/instances/create_tracking_job")
+async def create_tracking_job(req: JobRequest):
+    msg = await schedule_service.create_tracking_job(req.instance_id, req.time_interval, req.test_script, 
+                                                     req.backup_script, req.option, req.client_email)
+    return msg
+
+@app.post("/instances/post_process")
+async def post_process(req: PostProcessRequest):
+    
+    schedule_msg = schedule_service.remove_tracking_job(req.instance_id)
+    
+    if schedule_msg['status'] == "success":
+    
+        sdk_msg = await sdk_service.post_process(req.instance_id, req.option, req.client_email)
+        
+        if sdk_msg['status'] == 'success':
+    
+            return {
+                "status": "success",
+                "message": f"Schedule message: {schedule_msg}, SDK messsage: {sdk_msg}."
+            }
+            
+        else:
+            return sdk_msg
+    
+    else:
+        return schedule_msg
