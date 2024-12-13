@@ -5,8 +5,8 @@ import os
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-import app.sdk_service as sdk_service
-import app.schedule_service as schedule_service
+import sdk_service
+import schedule_service
 import api_service
 from config import API_KEY
 from pydantic import BaseModel
@@ -45,6 +45,10 @@ async def root():
 
 @app.get("/instances")
 async def get_instances():
+    """
+    Get list of all instances
+    """
+    
     return api_service.get_instances()
 
 
@@ -76,6 +80,10 @@ async def get_instances():
 
 @app.get("/instances/{instance_id}")
 async def get_instance_info(instance_id: int):
+    """
+    Get instance's information
+    """
+    
     info = api_service.get_instance_info(instance_id)
     if info:
         return info
@@ -85,17 +93,29 @@ async def get_instance_info(instance_id: int):
 # return {"ssh_addr": str, "ssh_port": int}
 @app.get("/instances/ssh_info/{instance_id}")
 async def get_ssh(instance_id):
+    """
+    Get instance's ssh information
+    """
+    
     return api_service.get_ssh_info(instance_id)
 
 
 # return {"public_ip": str, "hostport": str}
 @app.get("/instances/ip_and_hostport/{instance_id}")
 async def get_ip_and_hostport(instance_id):
+    """
+    Get instance's ip and hostport
+    """
+    
     return api_service.get_ip_and_hostport(instance_id)
 
 
 @app.post("/instances")
 async def create_instance(req: InstanceRequest):
+    """
+    Create an instance
+    """
+    
     # TODO: Implement the logic to create an instance based on 3 parameters
     new_istance = await sdk_service.launch_instance(req.task, req.training_time, req.presets)
     return new_istance
@@ -103,6 +123,10 @@ async def create_instance(req: InstanceRequest):
 
 @app.post("/select_instance")
 async def select_instance(req: InstanceRequest):
+    """
+    Select appropriate instance for current task, presets and training time
+    """
+    
     # TODO: If some appropriate instances already running, select it and return the instance_id
     # TODO: If no instances are running, create a new instance
     instance = await api_service.select_available_instance(req.task, req.training_time, req.presets)
@@ -113,17 +137,29 @@ async def select_instance(req: InstanceRequest):
 
 @app.get("/instances/start/{instance_id}")
 async def start_instance(instance_id: int):
-    return vast_sdk.start_instance(ID=instance_id)
+    """
+    Start an instance
+    """
+    
+    return vast_sdk.start_instance(id=instance_id)
 
 
 # TODO: add shutdown instance method
 @app.get("/instances/stop/{instance_id}")
 async def stop_instance(instance_id: int):
-    return vast_sdk.stop_instance(ID=instance_id)
+    """
+    Stop an instance
+    """
+    
+    return vast_sdk.stop_instance(id=instance_id)
 
 
 @app.post("/instances/attach_ssh_key")
 async def attach_ssh_key(ssh_attach: Ssh_attach):
+    """
+    Attach ssh key to an instance
+    """
+    
     return vast_sdk.attach_ssh(
         instance_id=ssh_attach.instance_id, ssh_key=ssh_attach.ssh_public_key
     )
@@ -131,18 +167,39 @@ async def attach_ssh_key(ssh_attach: Ssh_attach):
 
 @app.delete("/instances/{instance_id}")
 async def delete_instance(instance_id):
+    """
+    Delete an instance
+    """
+    
     return vast_sdk.destroy_instance(id=instance_id)
 
 
 # register new tracking job
+@app.get("/instances/get_running_status/{instance_id}")
+async def get_running_status(instance_id):
+    """
+    Get running status of an instance
+    """
+    
+    msg = schedule_service.check_instance_status(instance_id)
+    
+    return msg
+    
 @app.post("/instances/create_tracking_job")
 async def create_tracking_job(req: JobRequest):
+    """
+    Creating a new tracking job for an instance
+    """
+    
     msg = await schedule_service.create_tracking_job(req.instance_id, req.time_interval, req.test_script, 
                                                      req.backup_script, req.option, req.client_email)
     return msg
 
 @app.post("/instances/post_process")
 async def post_process(req: PostProcessRequest):
+    """
+    Post process an instance after it has finished or stopped
+    """
     
     schedule_msg = schedule_service.remove_tracking_job(req.instance_id)
     

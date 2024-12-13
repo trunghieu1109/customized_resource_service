@@ -1,0 +1,17 @@
+version: "1.0"
+
+services:
+  resource_service:
+    build: .
+    container_name: resource_service
+    ports:
+      - "10309:10309"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis
+    container_name: apscheduler_storage
+    ports:
+      - "10390:6379"
+    command: ["redis-server", "--appendonly", "yes"]

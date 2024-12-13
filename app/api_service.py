@@ -1,5 +1,6 @@
 import requests
 import json
+import time
 from config import API_KEY
 from vastai import VastAI
 import asyncio
@@ -42,7 +43,13 @@ appropriate_attr = {
 def get_instances():
     response = requests.request("GET", url, headers=headers, data=payload)
     
-    return response.json()["instances"]
+    if response:
+        return response.json()["instances"]
+    else:
+        time.sleep(0.2)
+        
+        response = requests.request("GET", url, headers=headers, data=payload)
+        return response.json()["instances"]
 
 def get_instance(id):
     instances = get_instances()
@@ -122,7 +129,7 @@ async def select_available_instance(task: str, training_time: int, presets: str)
 
     if appropriate_instance:
         instance_id = appropriate_instance["id"]
-        vast_sdk.start_instance(ID=instance_id)
+        vast_sdk.start_instance(id=instance_id)
 
         threshold = 20
         count = 0

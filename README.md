@@ -1,12 +1,7 @@
-# Install Redis
-Firstly, install redis docker to store tracking jobs
+# Build and run containers
 
 ```bash
-docker pull redis
-
-docker run --name redis -d -p 6379:6379 redis
-
-docker exec -it redis redis-cli
+docker-compose up --build -d
 ```
 
 # resource_service
