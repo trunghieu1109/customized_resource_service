@@ -1,0 +1,15 @@
+[vastai]
+api_key=enter_your_api_key
+
+[email]
+server_host=smtp.gmail.com
+server_port=465
+sender_email=enter_your_sender_email
+sender_name=enter_your_sender_name
+sender_pwd=enter_your_pass_word
+
+[redis]
+redis_host=redis
+redis_port=10390
+pool_size=20
+
