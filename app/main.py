@@ -35,7 +35,12 @@ class PostProcessRequest(BaseModel):
     client_email: str
     
 vast_sdk = VastAI(api_key=API_KEY)
-app = FastAPI()
+app = FastAPI(
+    title="Resource Service",
+    description="This is resource service.",
+    version="1.0.0",
+    docs_url="/docs"
+)
 
 
 @app.get("/")
@@ -189,6 +194,17 @@ async def get_running_status(instance_id):
 async def create_tracking_job(req: JobRequest):
     """
     Creating a new tracking job for an instance
+    
+    "instance_id" is id of an instance.
+    
+    "time_interval" is tracking time, calculated in seconds.
+    
+    "test_script", "backup_script" and "option" is optional. If you want to control and post process automatically, please provide fill these params. In the other case, set them to "".
+    
+    "option" is "stop", "destroy" or "send email".
+    
+    "client_email" is email that the system will send notification to.
+    
     """
     
     msg = await schedule_service.create_tracking_job(req.instance_id, req.time_interval, req.test_script, 
@@ -199,6 +215,13 @@ async def create_tracking_job(req: JobRequest):
 async def post_process(req: PostProcessRequest):
     """
     Post process an instance after it has finished or stopped
+    
+    "instance_id" is id of an instance.
+    
+    "option" is "stop", "destroy" or "send email".
+    
+    "client_email" is email that the system will send notification to.
+    
     """
     
     schedule_msg = schedule_service.remove_tracking_job(req.instance_id)
