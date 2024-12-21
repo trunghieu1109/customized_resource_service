@@ -9,9 +9,12 @@ import os
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import api_service
+import mail_service
+import logging_config
 
 vast_sdk = VastAI(api_key=API_KEY)
 
+logger = logging_config.get_logger("sdk_service")
 
 def convert_str_to_dict(str):
     json_part = re.search(r"\{.*\}", str).group(0)
@@ -38,7 +41,6 @@ def get_ssh_info(instance_id):
     else:
         print("Not found ssh info!")
         return None, None
-
 
 # Main function
 # Create new instance and return (instance id, ssh_addr, ssh_port)
@@ -106,6 +108,49 @@ async def launch_instance(task: str, training_time: int, presets: str):
     print("Recreating instance...")
     launch_instance(task, training_time, presets)
     return None
+
+async def post_process(instance_id: str, option: str, client_email: str = ""):
+    
+    instance = api_service.get_instance(instance_id)
+    
+    if instance and instance['cur_state'] == "running":
+        if option == "stop":
+            logger.info(f"Stopping instance {instance_id}.")
+            
+            vast_sdk.stop_instance(id=instance_id)
+        elif option in ["destroy", "delete"]:
+            logger.info(f"Destroying instance {instance_id}")
+            
+            vast_sdk.destroy_instance(id=instance_id)
+        elif option == "send email":
+            logger.info(f"Sending notification to {client_email} about instance {instance_id}")
+            
+            subject = mail_service.compose_subject_finished_instance(instance_id)
+            body = mail_service.compose_body_finished_instance(client_email, instance)
+            
+            result = mail_service.send_email(client_email, subject, body)
+            
+            return result
+            
+        else:
+            logger.error("Process option is invalid! You shoud pass one of the following options: stop, destroy or send email.")
+            
+            return {
+                "status": "error",
+                "message": "Process option is invalid! You shoud pass one of the following options: stop, destroy or send email."
+            }
+        
+        return {
+            "status": "success",
+            "message": f"Post process instance {instance_id}, option: {option} successfully!"
+        }
+    else:
+        logger.error(f"Instance {instance_id} was not existed or not ready! Please check instace_id.")
+        
+        return {
+            "status": "error",
+            "message": f"Instance {instance_id} was not existed or not ready! Please check instace_id."
+        }
 
 
 def test():

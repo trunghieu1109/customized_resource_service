@@ -1,3 +1,19 @@
 [vastai]
-api_key=insert_your_api_key_here
+api_key=enter_your_api_key
+
+[email]
+server_host=smtp.gmail.com
+server_port=465
+sender_email=enter_your_sender_email
+sender_name=enter_your_sender_name
+sender_pwd=enter_your_sender_password
+
+[redis]
+redis_host=redis
+redis_port=6379
+pool_size=50
+
+[auth]
+secret_key=enter_your_secret_key
+jwt_algorithm=enter_your_jwt_algorithm
 
