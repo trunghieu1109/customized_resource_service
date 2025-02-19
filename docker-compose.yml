@@ -1,17 +1,17 @@
-version: "1.0"
+version: "2.0"
 
 services:
-  resource_service:
+  resource_service_v2:
     build: .
-    container_name: resource_service
+    container_name: resource_service_v2
     ports:
-      - "10310:10310"
+      - "10311:10311"
     depends_on:
       - redis
 
   redis:
     image: redis
-    container_name: apscheduler_storage
+    container_name: apscheduler_storage_v2
     ports:
-      - "10390:6379"
+      - "10399:6379"
     command: ["redis-server", "--appendonly", "yes"]
