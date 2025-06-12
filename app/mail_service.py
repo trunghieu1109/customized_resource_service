@@ -41,10 +41,7 @@ def compose_body_finished_instance(client_email, instance):
                 Instance ID: {instance['id']}
                 Image: {instance['image_uuid']}
                 
-                You now have the option to either:
-
-                1. Delete the instance (This will permanently remove it from the system).
-                2. Stop the instance (This will halt its current execution, but it can be resumed later).
+                Let's check this instance for further usage, or remove if not in use anymore.
                 
                 If you have any questions or need further assistance, feel free to reach out to our support team.
 
@@ -80,7 +77,7 @@ def send_email(receiver: str, subject: str, body: str):
     
     except Exception as e:
         return {
-            "status": "success",
+            "status": "error",
             "message": f"Send email failed, error: {e}"
         }
     

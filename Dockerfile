@@ -8,12 +8,10 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN sed -i 's/mysignature/signature/g' /usr/local/lib/python3.12/site-packages/vastai/vast.py
-
 COPY . .
 
 COPY environment.ini .
 
 EXPOSE 10311
 
-ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10311", "--reload"]
+ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10311", "--reload", "--reload-dir", "./app"]

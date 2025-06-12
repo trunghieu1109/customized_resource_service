@@ -2,7 +2,7 @@ import requests
 import json
 import time
 from config import API_KEY
-from vastai import VastAI
+from vastai_sdk import VastAI
 import asyncio
 
 vast_sdk = VastAI(api_key=API_KEY)

@@ -14,4 +14,6 @@ services:
     container_name: apscheduler_storage_v2
     ports:
       - "10399:6379"
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server"]
+    volumes:
+      - ./redis-data-v2:/data

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, Header, HTTPException, status
-from vastai import VastAI
+from vastai_sdk import VastAI
 import sys
 import os
 
@@ -16,7 +16,6 @@ import logging
 class Ssh_attach(BaseModel):
     instance_id: int | str
     ssh_public_key: str
-    
 
 class InstanceRequest(BaseModel):
     task: str
@@ -26,9 +25,6 @@ class InstanceRequest(BaseModel):
 class JobRequest(BaseModel):
     instance_id: int | str
     time_interval: int
-    test_script: str
-    backup_script: str
-    option: str
     client_email: str
     
 class PostProcessRequest(BaseModel):
@@ -73,7 +69,7 @@ async def check_access_token(access_token : str = Header(None)):
     return message['user_info']
 
 def get_username_from_data(user_info: dict):
-    username = user_info["username".encode("utf-8")].decode("utf-8")
+    username = user_info["username"]
     return username
 
 @app.get("/")
@@ -238,16 +234,14 @@ async def create_tracking_job(req: JobRequest, user_info : dict = Depends(check_
     
     "test_script", "backup_script" and "option" is optional. If you want to control and post process automatically, please provide fill these params. In the other case, set them to "".
     
-    "option" is "stop", "destroy" or "send email".
-    
     "client_email" is email that the system will send notification to.
     
     """
     username = get_username_from_data(user_info)
     logger.info(f"{username} creates a new tracking job for instance {req.instance_id}")
     
-    msg = await schedule_service.create_tracking_job(req.instance_id, req.time_interval, req.test_script, 
-                                                     req.backup_script, req.option, req.client_email)
+    msg = await schedule_service.create_tracking_job(req.instance_id, req.time_interval, "", 
+                                                     "", "send email", req.client_email)
     return msg
 
 @app.post("/instances/post_process")

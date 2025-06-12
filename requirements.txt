@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-vastai
+vastai_sdk
 redis
 apscheduler
 pyjwt

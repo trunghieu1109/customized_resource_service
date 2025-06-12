@@ -1,5 +1,5 @@
 import asyncio
-from vastai import VastAI
+from vastai_sdk import VastAI
 import json
 import re
 from config import API_KEY
