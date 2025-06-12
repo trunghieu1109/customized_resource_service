@@ -7,17 +7,21 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.redis import RedisJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
+import api_service
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import sdk_service
 import api_service
-from constants import GPU_USAGE_THRESHOLD, CPU_USAGE_THRESHOLD, FULL_DISK_USAGE_THRESHOLD, IDLE_DISK_USAGE_THRESHOLD, TIME_LIMIT
+from constants import GPU_USAGE_THRESHOLD, CPU_USAGE_THRESHOLD, FULL_DISK_USAGE_THRESHOLD, IDLE_DISK_USAGE_THRESHOLD, TIME_LIMIT, ADMIN_CHECKING_HOUR, ADMIN_CHECKING_MINUTE, ADMIN_CHECKING_SECOND
 from config import API_KEY, REDIS_HOST, REDIS_PORT, POOL_SIZE, ADMIN_EMAIL
 from pydantic import BaseModel
 import mail_service
 
-instance_state_tracker = {}
+instance_state_tracker = {
+    'default': {},
+    'admin': {}
+}
 
 def check_scheduler_state(scheduler):
     state = scheduler.state
@@ -51,6 +55,7 @@ class TrackingJob(BaseModel):
     backup_script: str
     option: str
     client_email: str
+    is_admin: bool
 
 vast_sdk = VastAI(api_key=API_KEY)
 
@@ -117,6 +122,10 @@ def check_instance_status(instance_id: str, test_script: str = ""):
 
 def tracking_job(job: TrackingJob):
     
+    channel = 'default'
+    if job.is_admin:
+        channel = 'admin'
+    
     logger.info(f"Executing tracking job for instance {job.instance_id}.")
     
     instance_status_info = check_instance_status(job.instance_id, job.test_script)
@@ -126,14 +135,14 @@ def tracking_job(job: TrackingJob):
     logger.info(f"Instance {instance_id} current status: {instance_status}. Message: {instance_status_info['message']}")
     
     if instance_status in ['finished', 'ready']:
-        if instance_id not in instance_state_tracker:
-            instance_state_tracker[instance_id] = {
+        if instance_id not in instance_state_tracker[channel]:
+            instance_state_tracker[channel][instance_id] = {
                 "state": instance_status,
                 "first_seen": datetime.now()
             }
             logger.info(f"Instance {instance_id} is '{instance_status}'. Starting 2-hour countdown.")
         else:
-            tracked = instance_state_tracker[instance_id]
+            tracked = instance_state_tracker[channel][instance_id]
             if tracked["state"] == instance_status:
                 duration = datetime.now() - tracked["first_seen"]
                 if duration >= timedelta(hours=TIME_LIMIT):
@@ -166,15 +175,14 @@ def tracking_job(job: TrackingJob):
                                 subject = mail_service.compose_subject_ready_instance(instance_id)
                                 body = mail_service.compose_body_ready_instance(job.client_email, instance)
                             mail_service.send_email(job.client_email, subject, body)
-                            mail_service.send_email(ADMIN_EMAIL, subject, body)
 
-                    del instance_state_tracker[instance_id]
+                    del instance_state_tracker[channel][instance_id]
                 else:
-                    remaining_time = timedelta(minutes=TIME_LIMIT) - duration
+                    remaining_time = timedelta(hours=TIME_LIMIT) - duration
                     logger.info(f"Instance {instance_id} is '{instance_status}', but waiting. Time remaining: {remaining_time}.")
             else:
                 # State changed → reset tracking
-                instance_state_tracker[instance_id] = {
+                instance_state_tracker[channel][instance_id] = {
                     "state": instance_status,
                     "first_seen": datetime.now()
                 }
@@ -188,19 +196,58 @@ def tracking_job(job: TrackingJob):
             body = mail_service.compose_body_error_instance(job.client_email, instance, instance_status_info['message'])
             mail_service.send_email(job.client_email, subject, body)
         
-        if instance_id in instance_state_tracker:
-            del instance_state_tracker[instance_id]
+        if instance_id in instance_state_tracker[channel]:
+            del instance_state_tracker[channel][instance_id]
             logger.info(f"Resetting 'finished' timer for instance {instance_id} due to error status.")
     elif instance_status == "not existed":
         logger.info(f"Instance {instance_id} not existed.")
     else: 
-        if instance_id in instance_state_tracker:
-            del instance_state_tracker[instance_id]
+        if instance_id in instance_state_tracker[channel]:
+            del instance_state_tracker[channel][instance_id]
             logger.info(f"Instance {instance_id} is no longer 'finished' (current status: {instance_status}). Resetting timer.")
         
     return {
         "instance_status": instance_status,
         "message": f"Tracking for instance {job.instance_id} completed. Log: {instance_status_info['message']}."
+    }
+    
+def admin_tracking_job(job: TrackingJob):
+    
+    instance_list = api_service.get_instances()
+    
+    for instance in instance_list:
+        instance_id = instance["id"]
+        print(instance_id)
+        if instance_id not in instance_state_tracker['admin']:
+            # if instance was not tracked by user, automated create a new tracking job to monitor this instance.
+            logger.info(f"Admin creating tracking job for instance {instance_id}.")
+            job_id = "admin_job_" + str(instance_id)
+            
+            if scheduler.get_job(job_id):
+            
+                logger.error(f"Instance {instance_id} has been tracked. Please check instance_id")
+                continue
+            
+            job = TrackingJob(
+                instance_id = instance_id, 
+                test_script = "", 
+                backup_script = "", 
+                option = "send email",
+                client_email = ADMIN_EMAIL,
+                is_admin = True
+            )
+            
+            job = scheduler.add_job(tracking_job, "interval", hours = ADMIN_CHECKING_HOUR, minutes = ADMIN_CHECKING_MINUTE, seconds = ADMIN_CHECKING_SECOND, args = [job], id = job_id) 
+            
+            if not job:
+                logger.info(f"Create tracking job for {instance_id} failed")
+                return {
+                    "instance_status": 'error',
+                    "message": f"Create tracking job {job.instance_id} failed."
+                }
+    return {
+        "instance_status": 'success',
+        "message": f"Checking instance tracking job"
     }
 
 async def create_tracking_job(instance_id: str, hour: int = "0", minute: int = "5", second: int = "0", test_script: str = "", 
@@ -227,7 +274,8 @@ async def create_tracking_job(instance_id: str, hour: int = "0", minute: int = "
             test_script = test_script, 
             backup_script = backup_script, 
             option = option,
-            client_email = client_email
+            client_email = client_email,
+            is_admin = False
         )
         
         job = scheduler.add_job(tracking_job, "interval", hours = hour, minutes = minute, seconds = second, args = [job], id = job_id)
@@ -261,13 +309,21 @@ def remove_tracking_job(instance_id: str):
     
     if instance and instance['cur_state'] == "running":
         job_id = "job_" + str(instance_id)
+        admin_job_id = "admin_job_" + str(instance_id)
         
         job = scheduler.get_job(job_id)
+        admin_job = scheduler.get_job(admin_job_id)
         
-        if job:
+        if job or admin_job:
             logger.info(f"Removing tracking job of instance {instance_id}.")
             
-            scheduler.remove_job(job_id=job_id)
+            if job:
+                scheduler.remove_job(job_id=job_id)
+            
+            if admin_job:
+                logger.info(f"Removing default admin tracking job of instance {instance_id}.")
+                scheduler.remove_job(job_id=admin_job_id)
+            
             return {
                 "status": "success",
                 "messasge": f"Remove tracking job of instance {instance_id} successfully!"
@@ -279,16 +335,30 @@ def remove_tracking_job(instance_id: str):
                 "status": "error",
                 "message": f"Tracking job for instance {instance_id} is not existed! Please check instance_id?"
             }
+            
     else:
         logger.error(f"Instance {instance_id} was not tracked or not ready! Please check instance_id.")
         
         job_id = "job_" + str(instance_id)
+        admin_job_id = "admin_job_" + str(instance_id)
         
         job = scheduler.get_job(job_id)
+        admin_job = scheduler.get_job(admin_job_id)
         
-        if job:
-            logger.info(f"Removing tracking job of instance {instance_id} due to not existed")
-            scheduler.remove_job(job_id=job_id)
+        if job or admin_job:
+            logger.info(f"Removing tracking job of instance {instance_id}.")
+            
+            if job:
+                scheduler.remove_job(job_id=job_id)
+            
+            if admin_job:
+                logger.info(f"Removing default admin tracking job of instance {instance_id}.")
+                scheduler.remove_job(job_id=admin_job_id)
+            
+            return {
+                "status": "success",
+                "messasge": f"Remove tracking job of instance {instance_id} successfully!"
+            }
         
         return {
             "status": "error",
@@ -340,4 +410,24 @@ async def get_all_tracking_jobs():
         "status": "success",
         "message": jobs_json
     }
+    
+# create default admin tracking job
+default_admin_tracking_job_id = 'admin_tracking_job'
+default_admin_tracking_job = scheduler.get_job(default_admin_tracking_job_id)
+
+if not default_admin_tracking_job:
+    logger.info(f"Create default admin tracking job.")
+    admin_job = TrackingJob(
+        instance_id = 'admin', 
+        test_script = "", 
+        backup_script = "", 
+        option = "send email",
+        client_email = ADMIN_EMAIL,
+        is_admin = True
+    )
+    
+    admin_job = scheduler.add_job(admin_tracking_job, "interval", hours = ADMIN_CHECKING_HOUR, minutes = ADMIN_CHECKING_MINUTE, seconds = ADMIN_CHECKING_SECOND, args = [admin_job], id = default_admin_tracking_job_id) 
+    
+    if not admin_job:
+        logger.info(f"Create default admin tracking job failed")
 
