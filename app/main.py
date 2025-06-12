@@ -24,8 +24,10 @@ class InstanceRequest(BaseModel):
     
 class JobRequest(BaseModel):
     instance_id: int | str
-    time_interval: int
-    client_email: str
+    hour: int = "0"
+    minute: int = "5"
+    second: int = "0"
+    client_email: str = ""
     
 class PostProcessRequest(BaseModel):
     instance_id: int | str
@@ -240,7 +242,7 @@ async def create_tracking_job(req: JobRequest, user_info : dict = Depends(check_
     username = get_username_from_data(user_info)
     logger.info(f"{username} creates a new tracking job for instance {req.instance_id}")
     
-    msg = await schedule_service.create_tracking_job(req.instance_id, req.time_interval, "", 
+    msg = await schedule_service.create_tracking_job(req.instance_id, req.hour, req.minute, req.second, "", 
                                                      "", "send email", req.client_email)
     return msg
 

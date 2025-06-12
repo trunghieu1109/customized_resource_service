@@ -14,4 +14,4 @@ COPY environment.ini .
 
 EXPOSE 10311
 
-ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10311", "--reload", "--reload-dir", "./app"]
+ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10311", "--reload", "--reload-dir", "."]

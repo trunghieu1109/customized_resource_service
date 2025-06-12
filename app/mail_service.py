@@ -48,9 +48,29 @@ def compose_body_finished_instance(client_email, instance):
                 Best regards,
                 iSE Laboratory
             """
+            
+def compose_body_ready_instance(client_email, instance):
+    return f"""
+                Dear {client_email},
+
+                We are pleased to inform you that your instance on Vast AI is now ready to be used.
+
+                Instance ID: {instance['id']}
+                Image: {instance['image_uuid']}
+                
+                Let's use this instance or remove it if not in use anymore.
+                
+                If you have any questions or need further assistance, feel free to reach out to our support team.
+
+                Best regards,
+                iSE Laboratory
+            """
 
 def compose_subject_finished_instance(instance_id):
     return f"Notification about the process of the instance {instance_id} on Vast AI has been completed."
+
+def compose_subject_ready_instance(instance_id):
+    return f"Notification about the instance {instance_id} on Vast AI is now ready."
 
 def send_email(receiver: str, subject: str, body: str):
     message = MIMEMultipart()

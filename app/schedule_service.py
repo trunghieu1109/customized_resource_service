@@ -13,11 +13,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import sdk_service
 import api_service
 from constants import GPU_USAGE_THRESHOLD, CPU_USAGE_THRESHOLD, FULL_DISK_USAGE_THRESHOLD, IDLE_DISK_USAGE_THRESHOLD, TIME_LIMIT
-from config import API_KEY, REDIS_HOST, REDIS_PORT, POOL_SIZE
+from config import API_KEY, REDIS_HOST, REDIS_PORT, POOL_SIZE, ADMIN_EMAIL
 from pydantic import BaseModel
 import mail_service
 
-instance_finish_tracker = {}
+instance_state_tracker = {}
 
 def check_scheduler_state(scheduler):
     state = scheduler.state
@@ -105,6 +105,11 @@ def check_instance_status(instance_id: str, test_script: str = ""):
                         "message": f"Process in instance {instance_id} was finished."
                     }       
     else:      
+        
+        logger.info(f"Instance {instance_id} is not existed. Remove tracking job: job_{instance_id}")
+        
+        remove_tracking_job(instance_id)
+        
         return {
             "status": "not existed",
             "message": f"Can't found instance matching id: {instance_id}. Please check instance_id."
@@ -120,44 +125,60 @@ def tracking_job(job: TrackingJob):
     
     logger.info(f"Instance {instance_id} current status: {instance_status}. Message: {instance_status_info['message']}")
     
-    if instance_status == 'finished':
-        if instance_id not in instance_finish_tracker:
-            instance_finish_tracker[instance_id] = datetime.now()
-            logger.info(f"Instance {instance_id} is 'finished'. Starting 2-hour countdown.")
+    if instance_status in ['finished', 'ready']:
+        if instance_id not in instance_state_tracker:
+            instance_state_tracker[instance_id] = {
+                "state": instance_status,
+                "first_seen": datetime.now()
+            }
+            logger.info(f"Instance {instance_id} is '{instance_status}'. Starting 2-hour countdown.")
         else:
-            first_seen_time = instance_finish_tracker[instance_id]
-            duration = datetime.now() - first_seen_time
-            
-            if duration >= timedelta(hours=TIME_LIMIT):
-                logger.info(f"Instance {instance_id} has been 'finished' for {duration}. Proceeding with actions.")
-                
-                instance = api_service.get_instance(instance_id)
-                if instance:
-                    if job.backup_script:
-                        logger.info(f"Backing up data from instance {instance_id}.")
-                        vast_sdk.execute(id=instance_id, command=job.backup_script)
+            tracked = instance_state_tracker[instance_id]
+            if tracked["state"] == instance_status:
+                duration = datetime.now() - tracked["first_seen"]
+                if duration >= timedelta(hours=TIME_LIMIT):
+                    logger.info(f"Instance {instance_id} has been '{instance_status}' for {duration}. Proceeding with actions.")
                     
-                    if job.option == "stop":
-                        logger.info(f"Stopping instance {instance_id}.")
-                        vast_sdk.stop_instance(id=instance_id)
-                        scheduler.remove_job(job_id=f"job_{instance_id}")
-                    
-                    elif job.option in ["destroy", "delete"]:
-                        logger.info(f"Destroying instance {instance_id}.")
-                        vast_sdk.destroy_instance(id=instance_id)
-                        scheduler.remove_job(job_id=f"job_{instance_id}")
-                    
-                    else:
-                        logger.info(f"Sending notification to {job.client_email} about instance {instance_id}.")
-                        subject = mail_service.compose_subject_finished_instance(instance_id)
-                        body = mail_service.compose_body_finished_instance(job.client_email, instance)
-                        mail_service.send_email(job.client_email, subject, body)
-                
-                del instance_finish_tracker[instance_id]
+                    instance = api_service.get_instance(instance_id)
+                    if instance:
+                        if job.backup_script and instance_status == 'finished':
+                            logger.info(f"Backing up data from instance {instance_id}.")
+                            vast_sdk.execute(id=instance_id, command=job.backup_script)
+                        
+                        if job.option in ["stop", "destroy", "delete"]:
+                            if job.option == "stop":
+                                logger.info(f"Stopping instance {instance_id}.")
+                                vast_sdk.stop_instance(id=instance_id)
+                            else:
+                                logger.info(f"Destroying instance {instance_id}.")
+                                vast_sdk.destroy_instance(id=instance_id)
 
+                            scheduler.remove_job(job_id=f"job_{instance_id}")
+                        
+                        else:
+                            logger.info(f"Sending notification to {job.client_email} about instance {instance_id}.")
+                            subject = ""
+                            body = ""
+                            if instance_status == "finished":
+                                subject = mail_service.compose_subject_finished_instance(instance_id)
+                                body = mail_service.compose_body_finished_instance(job.client_email, instance)
+                            else:
+                                subject = mail_service.compose_subject_ready_instance(instance_id)
+                                body = mail_service.compose_body_ready_instance(job.client_email, instance)
+                            mail_service.send_email(job.client_email, subject, body)
+                            mail_service.send_email(ADMIN_EMAIL, subject, body)
+
+                    del instance_state_tracker[instance_id]
+                else:
+                    remaining_time = timedelta(minutes=TIME_LIMIT) - duration
+                    logger.info(f"Instance {instance_id} is '{instance_status}', but waiting. Time remaining: {remaining_time}.")
             else:
-                remaining_time = timedelta(hours=2) - duration
-                logger.info(f"Instance {instance_id} is 'finished', but waiting. Time remaining: {remaining_time}.")
+                # State changed → reset tracking
+                instance_state_tracker[instance_id] = {
+                    "state": instance_status,
+                    "first_seen": datetime.now()
+                }
+                logger.info(f"Instance {instance_id} changed state to '{instance_status}'. Timer reset.")
 
     elif instance_status == 'error':
         instance = api_service.get_instance(instance_id)
@@ -167,13 +188,14 @@ def tracking_job(job: TrackingJob):
             body = mail_service.compose_body_error_instance(job.client_email, instance, instance_status_info['message'])
             mail_service.send_email(job.client_email, subject, body)
         
-        if instance_id in instance_finish_tracker:
-            del instance_finish_tracker[instance_id]
+        if instance_id in instance_state_tracker:
+            del instance_state_tracker[instance_id]
             logger.info(f"Resetting 'finished' timer for instance {instance_id} due to error status.")
-            
+    elif instance_status == "not existed":
+        logger.info(f"Instance {instance_id} not existed.")
     else: 
-        if instance_id in instance_finish_tracker:
-            del instance_finish_tracker[instance_id]
+        if instance_id in instance_state_tracker:
+            del instance_state_tracker[instance_id]
             logger.info(f"Instance {instance_id} is no longer 'finished' (current status: {instance_status}). Resetting timer.")
         
     return {
@@ -181,7 +203,7 @@ def tracking_job(job: TrackingJob):
         "message": f"Tracking for instance {job.instance_id} completed. Log: {instance_status_info['message']}."
     }
 
-async def create_tracking_job(instance_id: str, time_interval: int = "300", test_script: str = "", 
+async def create_tracking_job(instance_id: str, hour: int = "0", minute: int = "5", second: int = "0", test_script: str = "", 
                               backup_script: str = "", option: str = "", client_email: str = ""):
     
     logger.info(f"Creating new tracking job for instance {instance_id}.")
@@ -208,7 +230,7 @@ async def create_tracking_job(instance_id: str, time_interval: int = "300", test
             client_email = client_email
         )
         
-        job = scheduler.add_job(tracking_job, "interval", seconds = time_interval, args = [job], id = job_id)
+        job = scheduler.add_job(tracking_job, "interval", hours = hour, minutes = minute, seconds = second, args = [job], id = job_id)
         
         if job:
             return {
@@ -259,6 +281,14 @@ def remove_tracking_job(instance_id: str):
             }
     else:
         logger.error(f"Instance {instance_id} was not tracked or not ready! Please check instance_id.")
+        
+        job_id = "job_" + str(instance_id)
+        
+        job = scheduler.get_job(job_id)
+        
+        if job:
+            logger.info(f"Removing tracking job of instance {instance_id} due to not existed")
+            scheduler.remove_job(job_id=job_id)
         
         return {
             "status": "error",

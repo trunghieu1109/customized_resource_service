@@ -16,6 +16,7 @@ SENDER_PWD = config["email"]["sender_pwd"]
 SERVER_HOST = config["email"]["server_host"]
 SERVER_PORT = config["email"]["server_port"]
 SENDER_NAME = config["email"]["sender_name"]
+ADMIN_EMAIL = config["email"]["admin_email"]
 
 # Redis connection config
 REDIS_HOST = config["redis"]["redis_host"]
